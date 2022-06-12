@@ -11,10 +11,6 @@ using System.Threading.Tasks;
 using PetaPoco.Core;
 using PetaPoco.Internal;
 using PetaPoco.Utilities;
-#if !NETSTANDARD
-using System.Configuration;
-
-#endif
 
 namespace PetaPoco
 {
@@ -59,51 +55,6 @@ namespace PetaPoco
 #endregion
 
 #region Constructors
-
-#if !NETSTANDARD
-        /// <summary>
-        ///     Constructs an instance using the first connection string found in the app/web configuration file.
-        /// </summary>
-        /// <param name="defaultMapper">The default mapper to use when no specific mapper has been registered.</param>
-        /// <exception cref="InvalidOperationException">Thrown when no connection strings can registered.</exception>
-        public Database(IMapper defaultMapper = null)
-        {
-            if (ConfigurationManager.ConnectionStrings.Count == 0)
-                throw new InvalidOperationException("One or more connection strings must be registered to use the no-parameter constructor");
-
-            var entry = ConfigurationManager.ConnectionStrings[0];
-            _connectionString = entry.ConnectionString;
-            InitialiseFromEntry(entry, defaultMapper);
-        }
-
-        /// <summary>
-        ///     Constructs an instance using a supplied connection string name. The actual connection string and provider will be
-        ///     read from app/web.config.
-        /// </summary>
-        /// <param name="connectionStringName">The name of the connection.</param>
-        /// <param name="defaultMapper">The default mapper to use when no specific mapper has been registered.</param>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="connectionStringName" /> is null or empty.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when a connection string cannot be found.</exception>
-        public Database(string connectionStringName, IMapper defaultMapper = null)
-        {
-            if (string.IsNullOrEmpty(connectionStringName))
-                throw new ArgumentException("Connection string name must not be null or empty", nameof(connectionStringName));
-
-            var entry = ConfigurationManager.ConnectionStrings[connectionStringName];
-
-            if (entry == null)
-                throw new InvalidOperationException(string.Format("Can't find a connection string with the name '{0}'", connectionStringName));
-
-            _connectionString = entry.ConnectionString;
-            InitialiseFromEntry(entry, defaultMapper);
-        }
-
-        private void InitialiseFromEntry(ConnectionStringSettings entry, IMapper defaultMapper)
-        {
-            var providerName = !string.IsNullOrEmpty(entry.ProviderName) ? entry.ProviderName : "System.Data.SqlClient";
-            Initialise(DatabaseProvider.Resolve(providerName, false, _connectionString), defaultMapper);
-        }
-#endif
 
         /// <summary>
         ///     Constructs an instance using a supplied IDbConnection.
@@ -217,9 +168,6 @@ namespace PetaPoco
             IProvider provider = null;
             IDbConnection connection = null;
             string providerName = null;
-#if !NETSTANDARD
-            ConnectionStringSettings entry = null;
-#endif
 
             settings.TryGetSetting<IProvider>(DatabaseConfigurationExtensions.Provider, p => provider = p);
             settings.TryGetSetting<IDbConnection>(DatabaseConfigurationExtensions.Connection, c => connection = c);
@@ -233,42 +181,14 @@ namespace PetaPoco
             {
                 settings.TryGetSetting<string>(DatabaseConfigurationExtensions.ConnectionString, cs => _connectionString = cs);
 
-#if !NETSTANDARD
-                if (_connectionString == null)
-                {
-                    string connectionStringName = null;
-                    settings.TryGetSetting<string>(DatabaseConfigurationExtensions.ConnectionStringName, n => connectionStringName = n);
-
-                    if (connectionStringName != null)
-                    {
-                        entry = ConfigurationManager.ConnectionStrings[connectionStringName];
-                        if (entry == null)
-                            throw new InvalidOperationException($"Can't find a connection string with the name '{connectionStringName}'");
-                    }
-                    else
-                    {
-                        if (ConfigurationManager.ConnectionStrings.Count == 0)
-                            throw new InvalidOperationException("One or more connection strings must be registered, when not providing a connection string");
-
-                        entry = ConfigurationManager.ConnectionStrings[0];
-                    }
-
-                    _connectionString = entry.ConnectionString;
-                }
-#else
                 if (_connectionString == null)
                     throw new InvalidOperationException("A connection string is required.");
-#endif
             }
 
             if (provider != null)
                 Initialise(provider, defaultMapper);
             else if (providerName != null)
                 Initialise(DatabaseProvider.Resolve(providerName, false, _connectionString), defaultMapper);
-#if !NETSTANDARD
-            else if (entry != null)
-                InitialiseFromEntry(entry, defaultMapper);
-#endif
             else if (connection != null)
                 Initialise(DatabaseProvider.Resolve(_sharedConnection.GetType(), false, _connectionString), defaultMapper);
             else
@@ -360,7 +280,6 @@ namespace PetaPoco
             _sharedConnectionDepth++;
         }
 
-#if ASYNC
         /// <summary>
         ///     The async version of <see cref="OpenSharedConnection" />.
         /// </summary>
@@ -397,7 +316,6 @@ namespace PetaPoco
 
             _sharedConnectionDepth++;
         }
-#endif
 
         /// <summary>
         ///     Releases the shared connection.
@@ -477,7 +395,6 @@ namespace PetaPoco
             }
         }
 
-#if ASYNC
         /// <inheritdoc />
         public Task BeginTransactionAsync()
             => BeginTransactionAsync(CancellationToken.None);
@@ -495,7 +412,6 @@ namespace PetaPoco
                 OnBeginTransaction();
             }
         }
-#endif
 
         /// <summary>
         ///     Internal helper to cleanup transaction
@@ -788,8 +704,6 @@ namespace PetaPoco
             }
         }
 
-#if ASYNC
-
         public Task<int> ExecuteAsync(string sql, params object[] args)
             => ExecuteInternalAsync(CancellationToken.None, CommandType.Text, sql, args);
 
@@ -826,8 +740,6 @@ namespace PetaPoco
                 return -1;
             }
         }
-
-#endif
 
 #endregion
 
@@ -872,8 +784,6 @@ namespace PetaPoco
                 return default(T);
             }
         }
-
-#if ASYNC
 
         /// <inheritdoc />
         public Task<T> ExecuteScalarAsync<T>(string sql, params object[] args)
@@ -923,8 +833,6 @@ namespace PetaPoco
             }
         }
 
-#endif
-
 #endregion
 
 #region operation: Fetch
@@ -953,7 +861,6 @@ namespace PetaPoco
         public List<T> Fetch<T>(long page, long itemsPerPage, Sql sql)
             => SkipTake<T>((page - 1) * itemsPerPage, itemsPerPage, sql.SQL, sql.Arguments);
 
-#if ASYNC
         /// <inheritdoc />
         public Task<List<T>> FetchAsync<T>()
             => FetchAsync<T>(CancellationToken.None, CommandType.Text, string.Empty);
@@ -1030,8 +937,6 @@ namespace PetaPoco
         public Task<List<T>> FetchAsync<T>(CancellationToken cancellationToken, long page, long itemsPerPage, Sql sql)
             => SkipTakeAsync<T>(cancellationToken, (page - 1) * itemsPerPage, itemsPerPage, sql.SQL, sql.Arguments);
 
-#endif
-
 #endregion
 
 #region operation: Page
@@ -1104,8 +1009,6 @@ namespace PetaPoco
         public Page<T> Page<T>(long page, long itemsPerPage, Sql sqlCount, Sql sqlPage)
             => Page<T>(page, itemsPerPage, sqlCount.SQL, sqlCount.Arguments, sqlPage.SQL, sqlPage.Arguments);
 
-#if ASYNC
-
         /// <inheritdoc />
         public async Task<Page<T>> PageAsync<T>(CancellationToken cancellationToken, long page, long itemsPerPage, string sqlCount, object[] countArgs,
                                                 string sqlPage, object[] pageArgs)
@@ -1169,8 +1072,6 @@ namespace PetaPoco
         public Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, Sql sqlCount, Sql sqlPage)
             => PageAsync<T>(CancellationToken.None, page, itemsPerPage, sqlCount.SQL, sqlCount.Arguments, sqlPage.SQL, sqlPage.Arguments);
 
-#endif
-
 #endregion
 
 #region operation: SkipTake
@@ -1189,8 +1090,6 @@ namespace PetaPoco
             BuildPageQueries<T>(skip, take, sql, ref args, out var sqlCount, out var sqlPage);
             return Fetch<T>(sqlPage, args);
         }
-
-#if ASYNC
 
         /// <inheritdoc />
         public Task<List<T>> SkipTakeAsync<T>(CancellationToken cancellationToken, long skip, long take)
@@ -1219,8 +1118,6 @@ namespace PetaPoco
         public Task<List<T>> SkipTakeAsync<T>(long skip, long take, Sql sql)
             => SkipTakeAsync<T>(skip, take, sql.SQL, sql.Arguments);
 
-#endif
-
 #endregion
 
 #region operation: Query
@@ -1242,7 +1139,6 @@ namespace PetaPoco
         public IEnumerable<T> Query<T>(Sql sql)
             => Query<T>(sql.SQL, sql.Arguments);
 
-#if ASYNC
         /// <inheritdoc />
         public Task QueryAsync<T>(Action<T> receivePocoCallback)
             => QueryAsync(receivePocoCallback, CancellationToken.None, CommandType.Text, string.Empty);
@@ -1447,8 +1343,6 @@ namespace PetaPoco
             return new AsyncReader<T>(this, cmd, reader, factory);
         }
 
-#endif
-
         protected virtual IEnumerable<T> ExecuteReader<T>(CommandType commandType, string sql, params object[] args)
         {
             OpenSharedConnection();
@@ -1523,7 +1417,6 @@ namespace PetaPoco
                 primaryKey is T ? poco.Columns[poco.TableInfo.PrimaryKey].GetValue(primaryKey) : primaryKey);
         }
 
-#if ASYNC
         public Task<bool> ExistsAsync<T>(object primaryKey)
             => ExistsAsync<T>(CancellationToken.None, primaryKey);
 
@@ -1547,7 +1440,6 @@ namespace PetaPoco
             return await ExecuteScalarAsync<int>(cancellationToken,
                        string.Format(_provider.GetExistsSql(), Provider.EscapeTableName(poco.TableName), sqlCondition), args).ConfigureAwait(false) != 0;
         }
-#endif
 
 #endregion
 
@@ -1592,8 +1484,6 @@ namespace PetaPoco
         /// <inheritdoc />
         public T FirstOrDefault<T>(Sql sql)
             => Query<T>(sql).FirstOrDefault();
-
-#if ASYNC
 
         /// <inheritdoc />
         public Task<T> SingleAsync<T>(object primaryKey)
@@ -1675,7 +1565,6 @@ namespace PetaPoco
         public Task<T> FirstOrDefaultAsync<T>(CancellationToken cancellationToken, Sql sql)
             => FirstOrDefaultAsync<T>(cancellationToken, sql.SQL, sql.Arguments);
 
-#endif
 
         private Sql GenerateSingleByKeySql<T>(object primaryKey)
         {
@@ -1837,8 +1726,6 @@ namespace PetaPoco
                 $"INSERT INTO {_provider.EscapeTableName(tableName)} ({string.Join(",", names.ToArray())}){outputClause} VALUES ({string.Join(",", values.ToArray())})";
         }
 
-#if ASYNC
-
         public Task<object> InsertAsync(string tableName, object poco)
             => InsertAsync(CancellationToken.None, tableName, poco);
 
@@ -1948,8 +1835,6 @@ namespace PetaPoco
                 return null;
             }
         }
-
-#endif
 
         #endregion
 
@@ -2122,8 +2007,6 @@ namespace PetaPoco
             AddParam(cmd, primaryKeyValue, pkpi);
         }
 
-#if ASYNC
-
         /// <inheritdoc />
         public Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue)
             => UpdateAsync(CancellationToken.None, tableName, primaryKeyName, poco, primaryKeyValue);
@@ -2267,8 +2150,6 @@ namespace PetaPoco
             }
         }
 
-#endif
-
 #endregion
 
 #region operation: Delete
@@ -2332,8 +2213,6 @@ namespace PetaPoco
             var pd = PocoData.ForType(typeof(T), _defaultMapper);
             return Execute(new Sql($"DELETE FROM {_provider.EscapeTableName(pd.TableInfo.TableName)}").Append(sql));
         }
-
-#if ASYNC
 
         /// <inheritdoc />
         public Task<int> DeleteAsync(string tableName, string primaryKeyName, object poco)
@@ -2418,8 +2297,6 @@ namespace PetaPoco
             var pd = PocoData.ForType(typeof(T), _defaultMapper);
             return ExecuteAsync(cancellationToken, new Sql($"DELETE FROM {_provider.EscapeTableName(pd.TableInfo.TableName)}").Append(sql));
         }
-
-#endif
 
 #endregion
 
@@ -2517,8 +2394,6 @@ namespace PetaPoco
             Save(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, poco);
         }
 
-#if ASYNC
-
         /// <inheritdoc />
         public Task SaveAsync(string tableName, string primaryKeyName, object poco)
             => SaveAsync(CancellationToken.None, tableName, primaryKeyName, poco);
@@ -2542,8 +2417,6 @@ namespace PetaPoco
             var pd = PocoData.ForType(poco.GetType(), _defaultMapper);
             return SaveAsync(cancellationToken, pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, poco);
         }
-
-#endif
 
 #endregion
 
@@ -2788,7 +2661,6 @@ namespace PetaPoco
         public int ExecuteNonQueryProc(string storedProcedureName, params object[] args)
             => ExecuteInternal(CommandType.StoredProcedure, storedProcedureName, args);
 
-#if ASYNC
         /// <inheritdoc />
         public Task QueryProcAsync<T>(Action<T> receivePocoCallback, string storedProcedureName, params object[] args)
             => QueryProcAsync(receivePocoCallback, CancellationToken.None, storedProcedureName, args);
@@ -2832,9 +2704,8 @@ namespace PetaPoco
         /// <inheritdoc />
         public Task<int> ExecuteNonQueryProcAsync(CancellationToken cancellationToken, string storedProcedureName, params object[] args)
             => ExecuteInternalAsync(cancellationToken, CommandType.StoredProcedure, storedProcedureName, args);
-#endif
 
-#endregion
+        #endregion
 
 #region Last Command
 
@@ -2983,7 +2854,6 @@ namespace PetaPoco
             return result;
         }
 
-#if ASYNC
         internal protected async Task<IDataReader> ExecuteReaderHelperAsync(CancellationToken cancellationToken, IDbCommand cmd)
         {
             if (cmd is DbCommand dbCommand)
@@ -3025,7 +2895,7 @@ namespace PetaPoco
             OnExecutedCommand(cmd);
             return result;            
         }
-#endif
+
         #endregion
 
         #region Events
